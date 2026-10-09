@@ -1,0 +1,1 @@
+2026-10-09 ~00:05 SGT: the gateway balance exhausted (-0.23 USD), API 403. All err=True rows quarantined here from the four hub-side grids; never deleted. Analysis loaders already exclude err/error rows (analyze_esota.load, partd ad-hoc checks re-verified). Dedup skips quarantined cells so the batches resume cleanly after top-up.

@@ -1,0 +1,8 @@
+# offline analysis (reproduce_all.sh) and tests
+openai          # imported by persistlab.py at load time; no call is made offline (tested with 2.44.0)
+matplotlib      # figures; byte-identical PDFs (up to the creation date) were produced with 3.11.0
+pytest
+# agent runs with the ROPE arm (rope_adapter.py) and test_rope.py / test_partd.py additionally need
+# the official ROPE code (see README) and its dependencies:
+jsonschema
+pyyaml
