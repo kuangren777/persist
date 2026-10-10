@@ -43,23 +43,22 @@ arrow((24, 30.5), (24, 23.5), style="-", ls=":")
 box(76, 38, 40, 14, "$M$:\n" r"mgr@int $\mapsto$ user" "\n" r"arch@ext $\mapsto$ agent_tool",
     fc="#ececec", fs=FSS, align="left")
 arrow((43.5, 34), (55.5, 36), "save", at=(49.5, 38))
-ax.text(76, 25.5, r"$U_M=\{v : \mathrm{tag}(v)=\mathrm{user}\}$", ha="center", fontsize=FSS)
+ax.text(76, 25.5, r"$U=\{v : \mathrm{tag}(v)=\mathrm{agent\_tool}\}$" "\n" r"minus values also tagged user", ha="center", va="center", fontsize=FSS)
 
 # session 2
-box(117, 58, 22, 6, r"$u'$: user msg")
-box(146, 58, 28, 6, r"call $c$ (targets)")
-dx, dy, dw, dh = 131, 38, 34, 17
+box(138, 58, 28, 6, r"call $c$ (targets)")
+dx, dy, dw, dh = 133, 38, 44, 17
 ax.add_patch(Polygon([(dx - dw / 2, dy), (dx, dy + dh / 2), (dx + dw / 2, dy), (dx, dy - dh / 2)],
                      closed=True, fc=ORANGE, ec=EDGE, lw=1.0))
-ax.text(dx, dy, "target$(c)\\subseteq$\n$U_M\\cup u'$ ?", ha="center", va="center", fontsize=FS,
+ax.text(dx, dy, "target$(c)\\cap U=\\emptyset$ ?", ha="center", va="center", fontsize=FS,
         linespacing=1.3)
-arrow((117, 54.5), (124, 44.5)); arrow((146, 54.5), (138, 44.5))
-arrow((96.5, 38), (113.5, 38), "load", at=(105, 40.2))
+arrow((138, 54.5), (135, 46.5))
+arrow((96.5, 38), (110.5, 38), "load", at=(103.5, 40.2))
 box(155, 22, 19, 6, r"execute $c$", fc="#e6f4e6")
 box(125, 18, 24, 6, "refuse + log", fc="#f7e6e6")
-arrow((143, 33.5), (152, 25.5), "yes", at=(151, 31))
+arrow((146, 33.5), (153, 25.5), "yes", at=(152.5, 31))
 arrow((127, 31), (125.5, 21.5), "no", at=(129.5, 26))
-ax.text(125, 10.5, r"match: exact $\parallel$ normalized", ha="center", fontsize=FSS)
+ax.text(125, 10.5, "match: exact", ha="center", fontsize=FSS)
 
 fig.savefig(out + ".pdf", bbox_inches="tight", pad_inches=0.03)
 fig.savefig(out + ".png", dpi=300, bbox_inches="tight", pad_inches=0.03)
