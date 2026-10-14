@@ -1,0 +1,76 @@
+# pattern (full-match regex on macro name)	reason (af-man #2148: one line per dropped macro; values stay in the data layer)
+Sens(H|Contig|Spaced|SpacedDeliv|LB)A(One|Two|Three)(None|ProvGate|ProvGateWide|ProvStrict)	every cell printed as a literal in tab_rq4adapt_sens (Table sens)
+AdaptStrictResidual	duplicate of \AdaptATwoProvStrictWorstN (same 19/240), which the text prints
+Benign(DiffPct|DiffLoPct|DiffHiPct|PairedP|PreserveNonePct|PreserveProvPct)	main-grid preservation contrast; the controlled mechanism batch is the single authoritative preservation source (one-snapshot rule)
+BenignGateAloneWidePct	duplicate of \BenignGateWidePct (gate alone + wide recognizer preservation), which the text prints
+LaunderProvEndToEndPct	percent twin of \LaunderProvEndToEndN, which the text prints
+AdminGrantFullPct	percent twin of \AdminGrantFullN, which the text prints
+EndToEndProvPct	the head-to-head reports harm under one metric; the main-grid annotated-gate rate is printed as \EndToEndProvN with its Wilson interval
+AblationGateAlonePct	percent twin of \AblationGateAloneHarmN, which the text prints
+(AblationGateAloneFrontierPct|EndToEndNonePctFrontier|EndToEndProvPctFrontier|PersistNonePooledPctFrontier|NumFrontier)	frontier-only subset numbers; the frontier column of Table esota carries the subset, no prose claim uses these
+HolmFamilyN	duplicate of the family size inside \HolmSigN ("x of nine"), which the text prints
+WideNoneExactPct	exact-value activation of the wide batch; the paper scores every arm by the target-argument harm metric (\WideNoneHarmN printed)
+Abl(AOne|ATwo|AThree)(Exact|Sub|Norm|Rawcall)(Pct|N)	cell of tab_ablation (Table ablation) printed as a literal; the text cites the cells it argues from
+Deleg(Ifc|Louck|None|Ppmf|ProvGate|ProvStrict|Rope)(NotStored|Rem|Pres)Pct	cell of tab_delegated printed as a literal; the text cites counts (\Deleg*N)
+Esota(Harm|Pres)(CI|Diff|PHolm)(Ifc|Louck|Ppmf|Rope)	cell of tab_esota_sig (Table esotasig) printed as a literal
+Esota(Harm|Pres)P(Ifc|Louck|Ppmf|Rope)	unadjusted p; the Holm-adjusted p is printed in tab_esota_sig, the only p the comparison family uses
+Esota(Harm|Pres)NDCIbound|EsotaPresSpreadPp	summary bounds of the intervals in tab_esota_sig and of the preservation range the text states by its endpoints
+Esota(None|ProvStrict|Ifc|Louck|Ppmf|Rope|RopeRaw)HarmN	harm count printed in parentheses in tab_esota
+Esota(None|Louck|Ppmf|Rope)PresPct	cell of tab_esota printed as a literal
+ExpZero(Deleg|Relay)(DeepseekV|Glm|KimiK|QwenB|Pooled)(Hidden|Exposed)	cell of tab_exp0 (Table exp0) printed as a literal; the text cites the differences and p
+ExpZeroRelayDeepseekV(Diff|P)	deepseek-v4.1-flash has 0/96 relay harm in both conditions, row printed in tab_exp0
+PartcA(One|Two|Three)(ProvGate|Ifc|Louck|Ppmf|Rope)HarmPct	cell of tab_partc printed as a literal where the text does not argue from it
+PartcA(One|Two|Three)P(Ifc|Louck|Ppmf|Rope)	printed as the p row under each gate in tab_partc
+PartcRelayRef(Claude|Deepseek|Gemini|Glm|Gpt|Grok)Pct	percent twin of \PartcRelayRef*N, which the text prints (k/n per af-man #2855)
+Partd(Atk|Contra|Corr|Elev|Bypass)(None|ProvGate|Louck|Ppmf|Rope)(Pct|N)	cell of tab_partd printed as a literal where the text does not argue from it
+PartdNModels	the model count is stated in words in the RQ4 setup and the caption of tab_partd
+AblNormOnlyAdmin	equals \AblNormOnlyN (all 29 are admin grants); the text states 'all ... are admin grants'
+ExpThree(QwenBig|QwenSmall)(None|Ratg|Gate|GateNorm)(HarmN|BtcrN)	cell of tab_exp3 (Table exp3) printed as a literal where the text does not argue from it
+ExpThree(QwenBig|QwenSmall)(Gate|GateNorm)(PNone|PRatg)	the text states one bound for the four gate-vs-none p (all below 0.001) and the smallest gate-vs-RATG p; the others are at or above them
+Partd(Stored|NotStored)Pres(None|Louck|Ppmf|ProvGate|Rope)Pct	percent twin of the printed k/n form
+PartdStoredPresRopeN	zero trials by construction (ROPE write guard stores no note); the text states it
+NoNote(Kept|Removed)(None|Louck|Ppmf)Pct	percent twin of the printed k/n form
+PTwoAtkCellsFourOneMini	same count (96) as the printed \PTwoAtkCellsFourOMini; the text says "per model"
+DelegAnomClassA	equals \DelegAnomLogged (all logged anomalies are class a), which the text prints with "In all"
+DelegAnomLocal	equals \DelegAnomLogged in this data (every logged anomaly is on a locally served model); the text prints the logged count
+DelegAnomQwenThirtyTwo	per-model split of the anomalies; no model-level anomaly breakdown is reported for any model
+DelegProvGateN	per-gate delegated count; text gives the maximum over gates (\DelegLouckN) and the table gives each gate (page budget 10-13)
+DelegProvStrictN	per-gate delegated count; in tab:delegated (page budget 10-13)
+DelegIfcN	per-gate delegated count; in tab:delegated (page budget 10-13)
+DelegPpmfN	per-gate delegated count; in tab:delegated (page budget 10-13)
+DelegRopeN	per-gate delegated count; in tab:delegated (page budget 10-13)
+DelegNoneN	no-defense delegated count; text gives \DelegNonePresPct, table gives the count (page budget 10-13)
+PartdStoredPresLouckN	post-hoc stored/not-stored split, superseded in text by the paired note-removal counterfactual (page budget 10-13)
+PartdStoredPresPpmfN	post-hoc stored split (page budget 10-13)
+PartdStoredPresNoneN	post-hoc stored split (page budget 10-13)
+PartdStoredPresProvGateN	post-hoc stored split (page budget 10-13)
+PartdNotStoredPresLouckN	post-hoc not-stored split (page budget 10-13)
+PartdNotStoredPresPpmfN	post-hoc not-stored split (page budget 10-13)
+PartdNotStoredPresNoneN	post-hoc not-stored split (page budget 10-13)
+PartdNotStoredPresProvGateN	post-hoc not-stored split (page budget 10-13)
+PartdNotStoredPresRopeN	post-hoc not-stored split; text states all ROPE preserved trials are bypasses (page budget 10-13)
+PartcAOneCIIfc	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcAOneCILouck	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcAOneCIPpmf	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcAOneCIRope	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcATwoCIIfc	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcATwoCILouck	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcATwoCIPpmf	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcATwoCIRope	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcAThreeCIIfc	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcAThreeCILouck	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcAThreeCIPpmf	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+PartcAThreeCIRope	scenario interval behind the Holm p printed in tab:partc; the table carries p only (scenario-level switch 10-13)
+AttackReductionP	pooled main-grid test is not a pre-registered family; the text reports effect, scenario interval and 8/8 direction (af-man #4732)
+HolmSigN	per-model Holm count is 0 of 9 at scenario level; tab:rq2 prints each per-model scenario p without a significance call (af-man #4732)
+MechAnnotDir	direction word; text states the signed difference
+MechFullDir	direction word; text states the signed difference
+MechGateAloneDir	direction word; text states the signed difference
+MechGateAloneSame	direction word; text states the signed difference
+MechAnnotP	trial-level benign test; benign has three scenarios, the text reports paired difference and direction count (af-man #4724)
+MechFullP	trial-level benign test; benign has three scenarios, the text reports paired difference and direction count (af-man #4724)
+MechGateAloneP	trial-level benign test; benign has three scenarios, the text reports paired difference and direction count (af-man #4724)
+WideResidualP	scenario-level p of the wide-recognizer residual; the residual sits in one scenario and the text states that fact
+WideResidualCI	same as WideResidualP
+AblAThreePSubVNorm	sub vs norm difference sits in one scenario; text states that fact via AblSubNormScenN
+EsotaRopeExcessScenN	equals one; text names the admin grant directly

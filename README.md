@@ -18,38 +18,41 @@ pip install -r requirements.txt
 ./reproduce_all.sh <paper folder>     # same, then compares with <paper folder>/numbers*.tex, tabs/, figs/
 ```
 
-No network access and no key are needed, and the run takes about 15 seconds. The comparison is byte for byte for
-the .tex files. For the PDF figures that `main.tex` includes it ignores only the `/CreationDate` entry, which
-matplotlib stamps with the current time. On the frozen paper all 22 .tex files are identical and the 6
-included figures are identical up to that date (Python 3.13, matplotlib 3.11.0). Other matplotlib versions can
-change figure bytes without changing the plotted values. `reproduce_all.sh` exits non-zero if a .tex file
-differs.
+No network access and no key are needed, and the run takes about a minute. With a paper folder,
+`reproduce_all.sh` first drops the macros listed in `macro_drops.tsv` that the paper's text does not print
+(`prune_macros.py`, the same step the paper build runs; each line of `macro_drops.tsv` gives its reason). It then
+compares byte for byte for the .tex files. For the PDF figures that `main.tex` includes it ignores only the
+`/CreationDate` entry, which matplotlib stamps with the current time.
+
+On the paper version at Overleaf commit c1f7725, all 31 .tex files are identical, 11 `numbers*.tex` and 20 `tabs/*.tex`. The 6 included figures are identical up to that date (Python 3.13, matplotlib 3.11.0). Other matplotlib versions can change figure bytes without changing the plotted values. `reproduce_all.sh` exits non-zero if a .tex file differs.
+
+Every number is computed at full precision from integer counts and rounded once when it is written, with
+ROUND_HALF_UP (`fmtnum.py`, used through `analyze.fx` and `analyze.fr`).
 
 Every analyzer writes to `$PERSIST_OUT` (set by `reproduce_all.sh` to `out/`) and reads only the files named in
-its explicit input list. Files in `results/` that a list does not name are never read by that analyzer.
+its explicit input list. `results/` holds exactly the files these lists name.
 
 ## Paper file, generator, input
 
-| paper file | in `main.tex` | generator | input rows (under `results/`) |
-|---|---|---|---|
-| `numbers.tex` | yes | `analyze.py` | `analyze.MAIN_GRID_FILES` (15 files: `grid_v6*.jsonl`, `grid_v8_ga*.jsonl`, `grid_v9_gaw.jsonl`, `grid_top_*.jsonl`), and `verify/rq3mech.json` for the `Mech*` macros |
-| `tabs/tab_rq1.tex`, `tab_rq2.tex`, `tab_rq3.tex`, `tab_contingency.tex`, `tab_scendef.tex`, `tab_rq5scen.tex` | yes | `analyze.py` | `MAIN_GRID_FILES` |
-| `tabs/tab_rq4.tex`, `tab_rq5.tex` | no (in the paper folder, not input) | `analyze.py` | `MAIN_GRID_FILES` |
-| `tabs/tab_rq3mech.tex` | yes | `analyze.py` | `verify/rq3mech.json` (written by `verify_rq3mech.py`) |
-| `numbers_adaptive.tex`, `tabs/tab_rq4adapt.tex` | yes | `analyze_adaptive.py` | `analyze_adaptive.ADAPTIVE_FILES` (`grid_adaptive_<model>.jsonl` for claude-sonnet-5, gemini-3.1-pro, gpt-5.6-sol, llama31-8b-local, qwen3-8b-yf) |
-| `numbers_adaptive_sens.tex` | yes | `analyze_adaptive_sensitivity.py` | `ADAPTIVE_FILES` |
-| `tabs/tab_rq4adapt_sens.tex` | no (in the paper folder, not input) | `analyze_adaptive_sensitivity.py` | `ADAPTIVE_FILES` |
-| `numbers_esota.tex`, `tabs/tab_esota.tex` | yes | `analyze_esota.py` | `analyze_esota.ESOTA_FILES` (`_esota/grid_esota_{frontier,local,qwen8b,ropererun_frontier,ropererun_local}.jsonl`) |
-| `numbers_delegated.tex`, `tabs/tab_delegated.tex` | yes | `analyze_delegated.py` | `analyze_delegated.DELEG_FILES` (`_esota/grid_delegated_{frontier,local}.jsonl`) |
-| `numbers_partc.tex`, `tabs/tab_partc.tex` | yes | `analyze_partc.py` | `grid_adaptive_pc_frontier.jsonl` |
-| `numbers_partd.tex`, `tabs/tab_partd.tex` | yes | `analyze_partd.py` | `grid_partd.jsonl` |
-| `figs/fig_gap.pdf`, `fig_defense.pdf`, `fig_tradeoff.pdf`, `fig_heatmap.pdf`, `fig_scenario.pdf` | yes | `make_figs.py` | `MAIN_GRID_FILES` |
-| `figs/fig_launder.pdf`, `fig_ablation.pdf`, `fig_wide.pdf` | no | `make_figs.py` | `MAIN_GRID_FILES` |
-| `figs/fig_method.pdf` | yes | `fig_method_src.py` | none (diagram) |
+| paper file | generator | input rows (under `results/`) |
+|---|---|---|
+| `numbers.tex`, `tabs/tab_rq1.tex`, `tab_rq2.tex`, `tab_rq3.tex`, `tab_contingency.tex`, `tab_scendef.tex`, `tab_rq5scen.tex` | `analyze.py` | `analyze.MAIN_GRID_FILES` (15 files: `grid_v6*.jsonl`, `grid_v8_ga*.jsonl`, `grid_v9_gaw.jsonl`, `grid_top_*.jsonl`) |
+| `tabs/tab_rq3mech.tex`, the `Mech*` macros | `analyze.py` | `verify/rq3mech.json` (written by `verify_rq3mech.py`) |
+| `tabs/tab_rq4.tex`, `tab_rq5.tex`, kept in the paper folder but not input by `main.tex` | `analyze.py` | `MAIN_GRID_FILES` |
+| `numbers_esota.tex`, `tabs/tab_esota.tex`, `tab_esota_sig.tex` | `analyze_esota.py` | `_esota/grid_esota_{frontier,local,qwen8b,ropererun_frontier,ropererun_local}.jsonl` |
+| `numbers_adaptive.tex`, `tabs/tab_rq4adapt.tex` | `analyze_adaptive.py` | `grid_adaptive_<model>.jsonl` for claude-sonnet-5, gemini-3.1-pro, gpt-5.6-sol, llama31-8b-local, qwen3-8b-yf |
+| `numbers_adaptive_sens.tex`, `tabs/tab_rq4adapt_sens.tex` | `analyze_adaptive_sensitivity.py` | same five files |
+| `numbers_delegated.tex`, `tabs/tab_delegated.tex` | `analyze_delegated.py` | `_a9/a9a_deleg_{frontier,llama31-8b-local,qwen3-32b-local,qwen3-8b-local}.jsonl`, `_esota/grid_delegated_frontier.jsonl` |
+| `numbers_exp3.tex`, `tabs/tab_exp3.tex` | `analyze_exp3.py` | `_exp3/main/<model>_<condition>_<attack>_s<k>.jsonl` (64 shards, SleeperBench transfer) |
+| `numbers_partc.tex`, `tabs/tab_partc.tex` | `analyze_partc.py` | `_a7/partc_clean.jsonl` |
+| `numbers_partd.tex`, `tabs/tab_partd.tex`, `tab_partd_scen.tex` | `analyze_partd.py` | `grid_partd.jsonl` |
+| `numbers_ablation.tex`, `tabs/tab_ablation.tex` | `analyze_ablation.py` | `_a7/a7c_ablation.jsonl`, `_a9/a9b_benign_abl.jsonl` |
+| `numbers_exp0.tex`, `tabs/tab_exp0.tex` | `analyze_exp0.py` | `_a7/exp0_{deleg,relay}_{hidden,exposed}*.jsonl` (6 files); the post-hoc `DvP*` macros also read `_a7/a7d_p1clean.jsonl` and the archived tool-exposed batch `archive/tool_exposed_mixed_20261010/grid_adaptive_pc_frontier.jsonl` |
+| `numbers_a10.tex` | `analyze_a10.py` | `_a10/a10_nonote.jsonl`, `grid_partd.jsonl`, `amlp_m3/online_*.jsonl` (AgentDojo rows: official CaMeL and the Persist taint approximation, 6 files) |
+| `figs/fig_gap.pdf`, `fig_defense.pdf`, `fig_tradeoff.pdf`, `fig_heatmap.pdf`, `fig_scenario.pdf` | `make_figs.py` | `MAIN_GRID_FILES` |
+| `figs/fig_method.pdf` | `fig_method_src.py` | none (diagram) |
 
-The `figs/fig_launder.pdf`, `fig_ablation.pdf` and `fig_wide.pdf` files left in the paper folder predate the
-nine-model set and are not included by `main.tex`. `make_figs.py` regenerates them from the current rows, so
-they differ from the copies in the paper folder.
+`make_figs.py` also writes `fig_launder.pdf`, `fig_ablation.pdf` and `fig_wide.pdf`, which `main.tex` does not include.
 
 ## Layout
 
@@ -67,11 +70,13 @@ full_run.py, adaptive_run.py  early drivers of the first pilot; their outputs ar
 analyze*.py, make_figs.py     analysis, see the table above
 fig_method_src.py             method diagram
 compare_paper.py              comparison used by reproduce_all.sh
+fmtnum.py                     shared renderer: full precision, one ROUND_HALF_UP
+prune_macros.py, macro_drops.tsv   drop listed macros the paper does not print, each line with its reason
 test_*.py                     unit and regression tests (pytest)
 common_words_en.txt           word list used by the wide value recognizer in persistlab.py
 results/                      frozen rows, one JSON object per trial (see below)
-results/SNAPSHOT.sha256       hashes of the main-grid snapshot files, recorded at freeze time
-results/_superseded/, results/_esota/_superseded/   archived rows that errata replaced, each with NOTES.md
+results/archive/              the archived tool-exposed batch, read only by the post-hoc DvP comparison
+results/amlp_m3/              AgentDojo rows shared with the AMLP study, read only by analyze_a10.py
 docs/                         pre-registration (EXPERIMENT_PLAN_*.md), adaptive templates and harm-oracle
                               amendment (ADAPTIVE_*.md), append-only analysis log (ANALYSIS_LOG.md)
 ```
@@ -84,16 +89,14 @@ are excluded from every denominator. When a cell occurs twice the analyzers keep
 recomputes activation from `s2_calls` (`analyze.harm_target`), so it does not depend on the stored
 `activated` flag.
 
-`results/_superseded/` and `results/_esota/_superseded/` hold rows that a documented erratum replaced: the
-gateway-outage error rows, the ROPE runs before two adapter fixes, the part d rows before the ROPE prefix fix
-and the part d contradiction rows before amendment 6. No analyzer reads them. Each directory's `NOTES.md` and
-`docs/ANALYSIS_LOG.md` explain why the rows were replaced.
+Rows that a documented erratum replaced are not part of this release. `docs/ANALYSIS_LOG.md` records each
+replacement and its reason.
 
 ## Tests
 
 ```
 pytest -q test_analyzer_inputs.py test_analyze_partc.py test_analyze_partd.py test_adaptive.py test_ifc.py test_top_patch.py
-ROPE_SRC=<ROPE checkout>/src pytest -q test_*.py      # all 25 tests, including test_rope.py and test_partd.py
+ROPE_SRC=<ROPE checkout>/src pytest -q test_*.py      # all 26 tests, including test_rope.py and test_partd.py
 ```
 
 All tests are offline. `test_analyzer_inputs.py` checks that the analyzers read their explicit input lists and

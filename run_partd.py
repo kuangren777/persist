@@ -74,7 +74,7 @@ def make(key, polarity, cond):
     sc = P.Scenario(key=base.key, doc=base.doc, inject=base.inject, task1=base.task1, task2=base.task2,
                     poison=base.poison)
     sc.dir_key = DIR_KEY[key]
-    if cond == "corr":
+    if cond in ("corr", "corrnonote"):
         sc.dir_val = base.poison                      # directory agrees with the stored value
     else:
         sc.dir_val = DIR_CONTRA[key]                  # the official prior value, for both polarities
@@ -87,7 +87,7 @@ def run_one(j):
     m, key, pol, cond, d, s = j
     try:
         r = P.run_chain(m, make(key, pol, cond), defense=d, seed=s, benign=(pol == "benign"),
-                        phase=f"partd_{pol}_{cond}")
+                        phase=f"partd_{pol}_{cond}", clear_store=(cond == "corrnonote"))
         r["phase"] = f"partd_{pol}_{cond}"
         r["batch_id"] = BATCH_ID
         return r

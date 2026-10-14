@@ -4,6 +4,27 @@ import json, os, math
 from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Shared renderer (ra-01 #4861): full precision, one ROUND_HALF_UP at render time, counts as exact Fractions.
+# agent-fuzz/scripts/fmtnum.py in the monorepo, a copy next to this file in the release.
+import sys as _sys
+from fractions import Fraction
+for _d in (os.path.join(os.path.dirname(HERE), "scripts"), HERE):
+    if os.path.isfile(os.path.join(_d, "fmtnum.py")):
+        _sys.path.insert(0, _d)
+        break
+import fmtnum
+
+
+def fx(v, spec):
+    """Render v once with ROUND_HALF_UP. spec is '.Nf' or '+.Nf'. Count-based values arrive as Fraction (see fr),
+    so an exact .5 tie rounds up; p values and bootstrap bounds arrive as float."""
+    s = fmtnum.fmt(v, int(spec.lstrip("+.").rstrip("f")))
+    return "+" + s if spec.startswith("+") and not s.startswith("-") else s
+
+
+def fr(k, n, pct=False):
+    """k/n as an exact Fraction, times 100 when pct."""
+    return Fraction(100 * k if pct else k, n)
 RES = os.path.join(HERE, "results")
 # The main-grid input files, listed explicitly. A glob over results/grid*.jsonl also matched files that were
 # added after the paper's macros were frozen (grid_partd.jsonl, grid_adaptive_pc_*), which changed NumTrials
@@ -76,9 +97,36 @@ def mcnemar(pairs):
     return min(1.0, 2 * sum(comb(n, i) for i in range(k + 1)) / (2 ** n))
 
 
+def scen_test(triples, B=2000, seed=0):
+    """Scenario-level paired test (af-man #4719): scenario is the independent unit. triples = (scenario, a, b) per
+    paired trial. The statistic is the summed a-minus-b difference; the two-sided exact p flips the sign of each
+    scenario total over all 2^k assignments. The interval is a scenario-cluster bootstrap of the mean paired difference
+    in percentage points. Returns (diff_pp, p, lo, hi, k_scenarios, k_nonzero, k_same_sign)."""
+    import itertools, random as _r
+    cl = defaultdict(list)
+    for sc, a, b in triples:
+        cl[sc].append(int(bool(a)) - int(bool(b)))
+    if not cl:
+        return (0.0, 1.0, 0.0, 0.0, 0, 0, 0)
+    keys = sorted(cl); tot = [sum(cl[k]) for k in keys]; obs = abs(sum(tot))
+    ge = sum(1 for sg in itertools.product((1, -1), repeat=len(tot)) if abs(sum(x * y for x, y in zip(sg, tot))) >= obs)
+    p = ge / 2 ** len(tot)
+    def md(ks):
+        f = [x for k in ks for x in cl[k]]
+        return 100.0 * sum(f) / len(f)
+    rnd = _r.Random(seed)
+    bs = sorted(md([rnd.choice(keys) for _ in keys]) for _ in range(B))
+    nz = sum(1 for x in tot if x); same = max(sum(x > 0 for x in tot), sum(x < 0 for x in tot))
+    return (md(keys), p, bs[int(0.025 * B)], bs[int(0.975 * B) - 1], len(keys), nz, same)
+
+
+def fmt_p(p):
+    return fx(p, ".3f")
+
+
 def fmt(k, n):
     p, lo, hi = wilson(k, n)
-    return f"{p:.2f} [{lo:.2f},{hi:.2f}] ({k}/{n})"
+    return f"{fx(fr(k, n), '.2f') if n else '0.00'} [{fx(lo, '.2f')},{fx(hi, '.2f')}] ({k}/{n})"
 
 
 def load():
@@ -147,8 +195,8 @@ def main():
             cells[d] = (sum(r["activated"] for r in rs), len(rs))
             for r in rs:
                 bykey[(r["scenario"], r["seed"])][d] = r["activated"]
-        pairs = [(v["none"], v["provenance"]) for v in bykey.values() if "none" in v and "provenance" in v]
-        L.append(f"| {m} | " + " | ".join(fmt(*cells[d]) for d in ATTACK_DEF) + f" | {mcnemar(pairs):.4f} |")
+        trip = [(k[0], v["none"], v["provenance"]) for k, v in bykey.items() if "none" in v and "provenance" in v]
+        L.append(f"| {m} | " + " | ".join(fmt(*cells[d]) for d in ATTACK_DEF) + f" | {fx(scen_test(trip)[1], '.4f')} |")
     L.append("")
 
     # ---------- RQ3
@@ -221,7 +269,7 @@ def main():
         b01 = sum(1 for a, b in pr if (not a) and b); b10 = sum(1 for a, b in pr if a and (not b))
         L.append("")
         L.append(f"Variant-oracle residual, provenance vs prov_wide (paired McNemar): "
-                 f"b10={b10} (prov only) b01={b01} (prov_wide only), p={mcnemar(pr):.3f}.")
+                 f"b10={b10} (prov only) b01={b01} (prov_wide only), p={fx(mcnemar(pr), '.3f')}.")
         L.append("")
         L.append("Benign preservation under the normalized and wide arms (cost of each), pooled over three preferences:")
         L.append("")
@@ -243,7 +291,7 @@ def main():
         k = sum(r.get(field, False) for r in rs)
         return k, len(rs)
     def pct(k, n):
-        return f"{100*wilson(k,n)[0]:.1f}"
+        return fx(fr(k, n, True), ".1f") if n else "0.0"
     def mac(name, val):
         return "\\newcommand{\\%s}{%s}" % (name, val)
     # pooled attack end-to-end none vs provenance
@@ -252,7 +300,7 @@ def main():
     # pooled persistence vs activation (none) for the gap
     atkn = [r for r in by["attack"] if r["defense"] == "none" and r["model"] in MODELS]
     per = sum(r["persisted"] for r in atkn)
-    interc = (1 - (wilson(kp, npv)[0] / wilson(kn, nn)[0])) if wilson(kn, nn)[0] else 0.0
+    interc = (1 - Fraction(kp * nn, npv * kn)) if kn and npv else Fraction(0)
     # benign preservation pooled none vs provenance, plus the pre-specified all-model paired test
     bkn, bnn = pooled("benign", "none", "preserved"); bkp, bnp = pooled("benign", "provenance", "preserved")
     _bbk = defaultdict(dict)
@@ -283,12 +331,12 @@ def main():
     tag_ok = sum(1 for r in lp if r.get("poison_tagged_agent_tool")); tag_tot = len(lp)
     klp, nlp = pooled("launder", "provenance")
     M = [
-        mac("NumTrials", str(len(rows))),
+        mac("NumTrials", f"{len(rows):,}".replace(",", "{,}")),
         mac("PersistNonePooledPct", pct(per, len(atkn))),
         mac("EndToEndNonePct", pct(kn, nn)),
         mac("EndToEndProvPct", pct(kp, npv)),
         mac("EndToEndWhitelistPct", pct(kw, nw)),
-        mac("ProvInterceptPct", f"{100*interc:.1f}"),
+        mac("ProvInterceptPct", fx(100 * interc, ".1f")),
         mac("BenignPreserveNonePct", pct(bkn, bnn)),
         mac("BenignPreserveProvPct", pct(bkp, bnp)),
         mac("LaunderProvEndToEndPct", pct(klp, nlp)),
@@ -321,7 +369,7 @@ def main():
     for r in wide:
         if r["defense"] in ("provenance", "prov_wide"):
             _bk[(r["model"], r["scenario"], r["seed"])][r["defense"]] = harm_target(r)
-    _pr = [(v["provenance"], v["prov_wide"]) for v in _bk.values() if "provenance" in v and "prov_wide" in v]
+    _wtr = scen_test([(k[1], v["provenance"], v["prov_wide"]) for k, v in _bk.items() if "provenance" in v and "prov_wide" in v])
     lga_k, lga_n = pooled("launder", "prov_gate")
     M += [
         mac("WideNoneExactPct", pct(wne_k, wne_n)),
@@ -334,11 +382,12 @@ def main():
         mac("BenignProvWidePct", pct(wbw_k, wbw_n)),
         mac("BenignGateAloneWidePct", pct(bga_k, bga_n)),
         mac("BenignGateWidePct", pct(bgw_k, bgw_n)),
-        mac("BenignPairedP", f"{mcnemar(_bpr):.2f}"),
-        mac("BenignDiffPct", f"{_pt:.1f}"),
-        mac("BenignDiffLoPct", f"{_lo:.1f}"),
-        mac("BenignDiffHiPct", f"{_hi:.1f}"),
-        mac("WideResidualP", f"{mcnemar(_pr):.2f}"),
+        mac("BenignPairedP", fx(mcnemar(_bpr), ".2f")),
+        mac("BenignDiffPct", fx(_pt, ".1f")),
+        mac("BenignDiffLoPct", fx(_lo, ".1f")),
+        mac("BenignDiffHiPct", fx(_hi, ".1f")),
+        mac("WideResidualP", fmt_p(_wtr[1])),
+        mac("WideResidualCI", f"[{fx(_wtr[2], '+.1f')}, {fx(_wtr[3], '+.1f')}]"),
         mac("LaunderGateAloneN", f"{lga_k}/{lga_n}"),
         mac("LaunderProvEndToEndN", f"{klp}/{nlp}"),
         mac("EndToEndProvN", f"{kp}/{npv}"),
@@ -350,8 +399,8 @@ def main():
           mac("AblationGateAlonePct", pct(aga_k, aga_n))]
     # activation-gap significance: paired persistence vs activation under no defense
     _gp = [(r["persisted"], r["activated"]) for r in by["attack"] if r["defense"] == "none" and r["model"] in MODELS]
-    _gpp = mcnemar(_gp)
-    M += [mac("GapP", "<0.0001" if _gpp < 0.0001 else f"{_gpp:.4f}")]
+    _gt = scen_test([(r["scenario"], r["persisted"], r["activated"]) for r in by["attack"] if r["defense"] == "none" and r["model"] in MODELS])
+    M += [mac("GapP", fmt_p(_gt[1])), mac("GapCI", f"[{fx(_gt[2], '.1f')}, {fx(_gt[3], '.1f')}]"), mac("GapDiff", fx(_gt[0], ".1f"))]
     _pna = sum(1 for p, a in _gp if p and not a)
     M += [mac("PersistNoActN", f"{_pna}/{len(_gp)}")]
     # frontier-only pooled numbers (pre-registered: reported alongside the all-included pool)
@@ -380,9 +429,9 @@ def main():
         _nn = [r for r in by["attack"] if r["defense"] == "none" and r["model"] == _m]
         _pp = [r for r in by["attack"] if r["defense"] == "provenance" and r["model"] == _m]
         _pmd = {(r["scenario"], r["seed"]): r["activated"] for r in _nn}
-        _pr = [(_pmd[(r["scenario"], r["seed"])], r["activated"]) for r in _pp if (r["scenario"], r["seed"]) in _pmd]
+        _pr = [(r["scenario"], _pmd[(r["scenario"], r["seed"])], r["activated"]) for r in _pp if (r["scenario"], r["seed"]) in _pmd]
         if _pr:
-            _pm_p.append(mcnemar(_pr))
+            _pm_p.append(scen_test(_pr)[1])
     _sp = sorted(_pm_p); _mf = len(_sp); _hsig = 0
     for _i, _pv in enumerate(_sp):
         if _pv < 0.05 / (_mf - _i):
@@ -396,17 +445,18 @@ def main():
     _acl = defaultdict(list)
     for (_m, _sc, _s), v in _abk.items():
         if "none" in v and "provenance" in v:
-            _acl[(_m, _sc)].append(int(v["none"]) - int(v["provenance"]))
+            _acl[_sc].append(int(v["none"]) - int(v["provenance"]))
     _acls = list(_acl.values()); _rnd.seed(20261006); _ab = []
     for _ in range(2000):
         _samp = [_acls[_rnd.randrange(len(_acls))] for _ in range(len(_acls))]; _ab.append(_diff(_samp))
     _ab.sort(); _alo, _ahi = _ab[int(0.025 * len(_ab))], _ab[int(0.975 * len(_ab))]
     _W = {1:"one",2:"two",3:"three",4:"four",5:"five",6:"six",7:"seven",8:"eight",9:"nine"}
-    M += [mac("EndToEndNoneCI", f"[{100*_wn[1]:.1f}, {100*_wn[2]:.1f}]"),
-          mac("EndToEndProvCI", f"[{100*_wp[1]:.1f}, {100*_wp[2]:.1f}]"),
+    M += [mac("EndToEndNoneCI", f"[{fx(100 * _wn[1], '.1f')}, {fx(100 * _wn[2], '.1f')}]"),
+          mac("EndToEndProvCI", f"[{fx(100 * _wp[1], '.1f')}, {fx(100 * _wp[2], '.1f')}]"),
           mac("HolmSigN", f"{_W.get(_hsig,_hsig)} of {_W.get(_mf,_mf)}"),
           mac("HolmFamilyN", str(_mf)),
-          mac("AttackReductionCI", f"[{_alo:.1f}, {_ahi:.1f}]")]
+          mac("AttackReductionCI", f"[{fx(_alo, '.1f')}, {fx(_ahi, '.1f')}]"),
+          mac("AttackReductionP", fmt_p(scen_test([(k[1], v["none"], v["provenance"]) for k, v in _abk.items() if "none" in v and "provenance" in v])[1]))]
 
     # RQ3 mechanism test: same-batch none / gate-alone / full gate (verify/rq3mech.json), 3-arm paired
     mechp = os.path.join(RES, "verify", "rq3mech.json")
@@ -420,7 +470,7 @@ def main():
         LAB = [("none", "no defense"), ("prov_gate", "reference gate"), ("provenance", "annotated gate")]
         _figd = os.path.join(OUT, "tabs")
         open(os.path.join(_figd, "tab_rq3mech.tex"), "w").write("\n".join(
-            f"{lab} & {wilson(mpres[d_][0], mpres[d_][1])[0]:.2f} ({mpres[d_][0]}/{mpres[d_][1]}) \\\\"
+            f"{lab} & {fx(fr(mpres[d_][0], mpres[d_][1]), '.2f')} ({mpres[d_][0]}/{mpres[d_][1]}) \\\\"
             for d_, lab in LAB) + "\n")
         M += [mac("MechNonePct", pct(mpres["none"][0], mpres["none"][1])),
               mac("MechGateAlonePct", pct(mpres["prov_gate"][0], mpres["prov_gate"][1])),
@@ -436,9 +486,16 @@ def main():
             mpair[(m_, k_, s_)][d_] = bool(pr_)
         def _mp(a, b):
             return mcnemar([(v[a], v[b]) for v in mpair.values() if a in v and b in v])
-        M += [mac("MechFullP", f"{_mp('none', 'provenance'):.4f}"),
-              mac("MechGateAloneP", f"{_mp('none', 'prov_gate'):.2f}"),
-              mac("MechAnnotP", f"{_mp('prov_gate', 'provenance'):.4f}")]
+        M += [mac("MechFullP", fx(_mp('none', 'provenance'), ".4f")),
+              mac("MechGateAloneP", fx(_mp('none', 'prov_gate'), ".2f")),
+              mac("MechAnnotP", fx(_mp('prov_gate', 'provenance'), ".4f"))]
+        # benign has three scenarios (preferences), too few for a scenario-level test (min two-sided p 0.25):
+        # report the paired difference (b minus a, points) and how many of the three scenarios move the same way
+        _W3 = {0: "none", 1: "one", 2: "two", 3: "all three"}
+        for nm, a_, b_ in (("Full", "none", "provenance"), ("GateAlone", "none", "prov_gate"), ("Annot", "prov_gate", "provenance")):
+            st_ = scen_test([(k[1], v[b_], v[a_]) for k, v in mpair.items() if a_ in v and b_ in v])
+            M += [mac(f"Mech{nm}Diff", fx(st_[0], "+.1f")), mac(f"Mech{nm}Same", _W3[st_[6]]),
+                  mac(f"Mech{nm}Dir", "lower" if st_[0] < 0 else "higher")]
     if not os.environ.get("PERSIST_OUT"):   # project mode also keeps a copy next to the data
         open(os.path.join(RES, "numbers.tex"), "w").write("\n".join(M) + "\n")
     open(os.path.join(OUT, "numbers.tex"), "w").write("\n".join(M) + "\n")
@@ -449,7 +506,7 @@ def main():
           "deepseek-v4.1-flash": "deepseek", "glm-5.3": "glm-5.3", "kimi-k3": "kimi",
           "qwen3-8b-local": "qwen3-8b", "llama31-8b-local": "llama-3.1-8b", "qwen3-32b-local": "qwen3-32b"}
     def cell(k, n):
-        return f"{wilson(k,n)[0]:.2f}"
+        return fx(fr(k, n), ".2f") if n else "0.00"
 
     # RQ1
     t = []
@@ -469,11 +526,10 @@ def main():
             c[d] = cell(sum(r["activated"] for r in rs), len(rs))
             for r in rs:
                 bk[(r["scenario"], r["seed"])][d] = r["activated"]
-        pr = [(v["none"], v["provenance"]) for v in bk.values() if "none" in v and "provenance" in v]
-        p = mcnemar(pr)
+        p = scen_test([(k[0], v["none"], v["provenance"]) for k, v in bk.items() if "none" in v and "provenance" in v])[1]
         bold = "\\textbf{%s}" % c["provenance"]
         t.append(f"{SM[m]} & {c['none']} & {c['write_filter']} & {c['spotlight']} & {c['whitelist']} & "
-                 f"{bold} & {'<0.001' if p<0.001 else f'{p:.3f}'} \\\\")
+                 f"{bold} & {fx(p, '.3f')} \\\\")
     open(os.path.join(FIGD, "tab_rq2.tex"), "w").write("\n".join(t) + "\n")
 
     # Appendix: per-model McNemar 2x2 contingency, provenance (full gate) vs none, attack grid,
@@ -490,8 +546,8 @@ def main():
         b = sum(1 for n, p in pr if n and not p)
         c = sum(1 for n, p in pr if (not n) and p)
         dd = sum(1 for n, p in pr if (not n) and (not p))
-        pv = mcnemar(pr)
-        t.append(f"{SM[m]} & {a} & {b} & {c} & {dd} & {'<0.001' if pv<0.001 else f'{pv:.3f}'} \\\\")
+        pv = scen_test([(k[0], v["none"], v["provenance"]) for k, v in bk.items() if "none" in v and "provenance" in v])[1]
+        t.append(f"{SM[m]} & {a} & {b} & {c} & {dd} & {fx(pv, '.3f')} \\\\")
     open(os.path.join(FIGD, "tab_contingency.tex"), "w").write("\n".join(t) + "\n")
 
     # RQ3

@@ -1,1 +1,0 @@
-grid_esota_rope.jsonl: pre-#367 single-config ROPE run (PROMPT floor + injectable memory, no write guard, opus-4-8 router). After the two-config split this config = rope_raw (ROPE as-is cross-session). Relabeled defense rope->rope_raw into ../grid_esota_rope_raw.jsonl (identical config, not re-run). Benign preserve 150/540=27.8%.

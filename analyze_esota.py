@@ -4,7 +4,7 @@ per-gate harm (attack) and benign preservation, pooled over the nine included mo
 number alongside, plus a per-gate decision-rule breakdown (what each gate keys on). Harm = analyze.harm_target
 (same metric as the main grid). Writes tabs/tab_esota.tex + numbers_esota.tex into analyze.out_dir().
 """
-import json, glob, os, sys, random
+import json, glob, os, sys, random, math
 from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import analyze as A
@@ -18,6 +18,9 @@ def _holm(pairs):
         running = min(1.0, max(running, (k - rank) * pairs[i][1]))
         adj[pairs[i][0]] = running
     return adj
+
+
+SIG = {}   # (Harm|Pres, comparator) -> (p, diff, lo, hi, p_holm), filled by _sig_macros for tab_esota_sig
 
 
 def _sig_macros(rows, ours="prov_gate", comps=("louck", "ppmf", "ifc", "rope"), B=2000):
@@ -49,28 +52,21 @@ def _sig_macros(rows, ours="prov_gate", comps=("louck", "ppmf", "ifc", "rope"), 
                     continue
                 a, bo = oc(r), oc(rb)
                 cl[(m, sc)].append((a, bo)); mcp.append((bool(a), bool(bo)))
-            p = A.mcnemar(mcp)
-            keys = list(cl)
-            def md(sample):
-                ao = bb = n = 0
-                for kk in sample:
-                    for a, bo in cl[kk]:
-                        ao += a; bb += bo; n += 1
-                return 100.0 * (ao - bb) / n if n else 0.0
-            point = md(keys)
-            boots = sorted(md([random.choice(keys) for _ in keys]) for _ in range(B))
-            lo, hi = boots[int(0.025 * B)], boots[int(0.975 * B)]
+            st = A.scen_test([(kk[1], a, bo) for kk, v in cl.items() for a, bo in v], B=B, seed=12345)
+            p, point, lo, hi = st[1], st[0], st[2], st[3]
             per[b] = (p, point, lo, hi)
             pvals.append((b, p))
         adj = _holm(pvals)
+        for b in comps:
+            SIG[(tag, b)] = per[b] + (adj[b],)
         widths = [max(abs(per[b][2]), abs(per[b][3])) for b in comps]
         for b in comps:
             p, point, lo, hi = per[b]
             bt = b.title()
-            out += [f"\\newcommand{{\\Esota{tag}P{bt}}}{{{p:.2f}}}",
-                    f"\\newcommand{{\\Esota{tag}PHolm{bt}}}{{{adj[b]:.2f}}}",
-                    f"\\newcommand{{\\Esota{tag}Diff{bt}}}{{{point:+.2f}}}",
-                    f"\\newcommand{{\\Esota{tag}CI{bt}}}{{[{lo:+.2f}, {hi:+.2f}]}}"]
+            out += [f"\\newcommand{{\\Esota{tag}P{bt}}}{{{A.fx(p, '.2f')}}}",
+                    f"\\newcommand{{\\Esota{tag}PHolm{bt}}}{{{A.fx(adj[b], '.2f')}}}",
+                    f"\\newcommand{{\\Esota{tag}Diff{bt}}}{{{A.fx(point, '+.2f')}}}",
+                    f"\\newcommand{{\\Esota{tag}CI{bt}}}{{[{A.fx(lo, '+.2f')}, {A.fx(hi, '+.2f')}]}}"]
         # preservation spread across the arm family (max-min, pp) for the intro/abstract.
         # NOTE: the outer loop variable is `phase`; `ph` is shadowed by the row loop above.
         if phase == "benign":
@@ -80,11 +76,18 @@ def _sig_macros(rows, ours="prov_gate", comps=("louck", "ppmf", "ifc", "rope"), 
                 if rs2:
                     pres[d2] = 100.0 * sum(bool(r.get("preserved")) for r in rs2) / len(rs2)
             if pres:
-                out.append(f"\\newcommand{{\\EsotaPresSpreadPp}}{{{max(pres.values())-min(pres.values()):.1f}}}")
+                out.append(f"\\newcommand{{\\EsotaPresSpreadPp}}{{{A.fx(max(pres.values()) - min(pres.values()), '.1f')}}}")
         # family CI half-width bound over the no-difference comparators (louck, ppmf) for the summary sentence
         nd = [b for b in comps if b in ("louck", "ppmf")]
         bound = max(max(abs(per[b][2]), abs(per[b][3])) for b in nd) if nd else 0.0
-        out.append(f"\\newcommand{{\\Esota{tag}NDCIbound}}{{{bound:.1f}}}")
+        # third pair of the no-difference family, louck minus ppmf (af-man #4753): the bound covers all three pairs
+        tl = [(sc, oc(r), oc(idx[(ph, m, sc, "ppmf", s)])) for (ph, m, sc, d, s), r in idx.items()
+              if ph == phase and d == "louck" and (ph, m, sc, "ppmf", s) in idx]
+        st3 = A.scen_test(tl, B=B, seed=12345)
+        bound = max(bound, abs(st3[2]), abs(st3[3]))
+        print(f"{tag} louck-ppmf diff {st3[0]:+.2f} CI [{st3[2]:+.2f}, {st3[3]:+.2f}] p {st3[1]:.3f}")
+        bound = math.ceil(bound * 10 - 1e-9) / 10   # round outward (af-man #4762), never narrow the interval
+        out.append(f"\\newcommand{{\\Esota{tag}NDCIbound}}{{{A.fx(bound, '.1f')}}}")
     return out
 
 RES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "_esota")
@@ -96,7 +99,7 @@ MODELS = A.MODELS                 # the 9 included models
 FRONTIER = A.FRONTIER             # the 6 gateway models
 ARMS = ["none", "prov_gate", "prov_strict", "ifc", "louck", "ppmf", "rope", "rope_raw"]
 ARMLAB = {"none": "no defense", "prov_gate": "reference gate", "prov_strict": "strict variant",
-          "ifc": "taint matching", "louck": "Louck", "ppmf": "PPMF", "rope": "ROPE (memory-as-record)",
+          "ifc": "loose taint matching", "louck": "corroboration gate", "ppmf": "authority gate", "rope": "ROPE (memory-as-record)",
           "rope_raw": "ROPE (as-is)"}
 # one-line decision rule per gate, for the difference table (PM: show ifc is not our method relabeled)
 RULE = {"prov_gate": "refuse a target value that matches an untrusted-only stored item exactly",
@@ -137,7 +140,7 @@ def main():
     def pooled(phase_rows, defense, field, models):
         rs = [r for r in phase_rows if r["defense"] == defense and r["model"] in models]
         return (sum(bool(r.get(field)) for r in rs), len(rs)) if rs else (0, 0)
-    L = ["% auto: analyze_esota.py", "\\begin{tabular}{@{}lp{4.4cm}cccc@{}}", "\\toprule",
+    L = ["% auto: analyze_esota.py", "\\begin{tabular}{@{}lp{3.6cm}cccc@{}}", "\\toprule",
          "gate & rule & harm (9) $\\downarrow$ & harm (frontier) $\\downarrow$ & preserve (9) $\\uparrow$ & preserve (frontier) $\\uparrow$ \\\\", "\\midrule"]
     macros = []
     for d in ARMS:
@@ -146,8 +149,8 @@ def main():
         if hn == 0 and pn == 0:
             continue
         def pct(k, n):
-            return f"{100.0*k/n:.1f}" if n else "--"
-        L.append(f"{ARMLAB[d]} & {RULE.get(d,'')} & {pct(hk,hn)} & {pct(fhk,fhn)} & {pct(pk,pn)} & {pct(fpk,fpn)} \\\\")
+            return A.fx(A.fr(k, n, True), ".1f") if n else "--"
+        L.append(f"{ARMLAB[d]} & {RULE.get(d,'')} & {pct(hk,hn)} ({hk}/{hn}) & {pct(fhk,fhn)} & {pct(pk,pn)} & {pct(fpk,fpn)} \\\\")
         tag = d.title().replace("_", "")
         macros += [f"\\newcommand{{\\Esota{tag}HarmPct}}{{{pct(hk,hn)}}}",
                    f"\\newcommand{{\\Esota{tag}PresPct}}{{{pct(pk,pn)}}}",
@@ -155,8 +158,28 @@ def main():
     L += ["\\bottomrule", "\\end{tabular}"]
     OUTD = A.out_dir()
     macros += _sig_macros(rows)
+    # scenario-level reading of ROPE against the reference gate (af-man #4713): trial-level McNemar treats trials of
+    # one scenario as independent, so the text reports where the paired excess sits instead of a significance claim
+    pi = {(r["model"], r["scenario"], r["defense"], r["seed"]): bool(r.get("activated")) for r in atk if r["model"] in MODELS}
+    exc = defaultdict(int)
+    for (m, sc, d, s), v in pi.items():
+        if d == "rope" and (m, sc, "prov_gate", s) in pi:
+            exc[sc] += int(v) - int(pi[(m, sc, "prov_gate", s)])
+    macros += [f"\\newcommand{{\\EsotaRopeExcessN}}{{{sum(exc.values())}}}",
+               f"\\newcommand{{\\EsotaRopeExcessScenN}}{{{sum(1 for x in exc.values() if x > 0)}}}"]
+    print("rope - ref paired excess by scenario:", dict(exc))
     open(os.path.join(OUTD, "tabs", "tab_esota.tex"), "w").write("\n".join(L) + "\n")
     open(os.path.join(OUTD, "numbers_esota.tex"), "w").write("\n".join(macros) + "\n")
+    fp = lambda x: "$<$0.01" if x < 0.005 else A.fx(x, ".2f")
+    lab = {"louck": "corroboration gate", "ppmf": "authority gate", "ifc": "loose taint matching", "rope": "ROPE (memory-as-record)"}
+    T = ["% auto: analyze_esota.py, paired tests of the reference gate against each comparator", "\\begin{tabular}{@{}lcccc@{}}",
+         "\\toprule", "comparator & harm diff [95\\% CI] & Holm p & preservation diff [95\\% CI] & Holm p \\\\", "\\midrule"]
+    for b in ("louck", "ppmf", "ifc", "rope"):
+        h, q = SIG[("Harm", b)], SIG[("Pres", b)]
+        T.append(f"{lab[b]} & {A.fx(h[1], '+.2f')} [{A.fx(h[2], '+.2f')}, {A.fx(h[3], '+.2f')}] & {fp(h[4])} & "
+                 f"{A.fx(q[1], '+.2f')} [{A.fx(q[2], '+.2f')}, {A.fx(q[3], '+.2f')}] & {fp(q[4])} \\\\")
+    T += ["\\bottomrule", "\\end{tabular}"]
+    open(os.path.join(OUTD, "tabs", "tab_esota_sig.tex"), "w").write("\n".join(T) + "\n")
     from collections import Counter
     cov = Counter((r["phase"], r["model"], r["defense"]) for r in rows)
     print(f"esota rows: {len(rows)}; arms present: {sorted(set(r['defense'] for r in rows))}")

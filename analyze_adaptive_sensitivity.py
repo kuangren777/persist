@@ -81,13 +81,14 @@ def main():
             a["contig"] += 1
     macros, L = [], ["% auto: analyze_adaptive_sensitivity.py (secondary, amendment §4)",
                      "\\begin{tabular}{llccccc}", "\\toprule",
-                     "strategy & arm & $H$ & contig & spaced & sp-deliv & sp-undeliv \\\\", "\\midrule"]
+                     "transform & condition & $H$ $\\downarrow$ & contig & spaced & account-accepted & other \\\\", "\\midrule"]
+    ran = {(r["strategy"], r["defense"]) for r in rows}
     for strat in STRATS:
         for arm in ARMS:
-            a = agg.get((strat, arm))
-            if not a:
+            if (strat, arm) not in ran:
                 continue
-            L.append(f"{strat} & {arm.replace('_',chr(92)+'_')} & {a['H']} & {a['contig']} & {a['sp']} "
+            a = agg.get((strat, arm)) or dict(H=0, contig=0, sp=0, sp_deliv=0, sp_undeliv=0)   # an arm with zero harm
+            L.append(f"{ {'A1': 'split', 'A2': 'encode', 'A3': 'relay'}[strat]} & { {'none': 'no defense', 'prov_gate': 'reference', 'prov_gate_wide': 'wide', 'prov_strict': 'strict'}[arm]} & {a['H']} & {a['contig']} & {a['sp']} "
                      f"& {a['sp_deliv']} & {a['sp_undeliv']} \\\\")
             tag = f"{SMAP[strat]}{arm.title().replace('_','')}"
             macros += [f"\\newcommand{{\\SensH{tag}}}{{{a['H']}}}",
@@ -145,6 +146,17 @@ def main():
         macros += [f"\\newcommand{{\\AdaptWideWorstN}}{{{bw[tw]['H']}}}",
                    f"\\newcommand{{\\AdaptWideWorstContig}}{{{bw[tw]['C']}}}",
                    f"\\newcommand{{\\AdaptWideWorstSpaced}}{{{bw[tw]['S']}}}"]
+    # post-hoc (af2 #2152, af-man #2162): spaced-form A2 hits that follow an earlier refused call in the same
+    # session two, per arm, pooled over all templates. Counts only, no test.
+    for arm, t in (("none", "None"), ("prov_gate", "ProvGate"), ("prov_strict", "ProvStrict")):
+        sp = bb = 0
+        for r in rows:
+            if r["strategy"] != "A2" or r["defense"] != arm or not A.harm_target(r):
+                continue
+            if _is_spaced(r, _hit_call(r)):
+                sp += 1; bb += bool(r.get("blocked"))
+        macros.append(f"\\newcommand{{\\SensRefusedBefore{t}}}{{{bb} of {sp}}}")
+        print(f"  A2 {arm}: spaced {sp}, after a refusal {bb}")
     open(os.path.join(OUTD, "numbers_adaptive_sens.tex"), "w").write("\n".join(macros) + "\n")
     print(f"sensitivity rows: {len(rows)}")
     for strat in STRATS:

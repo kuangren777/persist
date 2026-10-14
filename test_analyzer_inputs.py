@@ -10,14 +10,16 @@ import analyze_delegated as D
 
 
 def _macros(path):
-    return dict(re.findall(r"\\newcommand\{\\(\w+)\}\{([^}]*)\}", open(path).read()))
+    return dict(re.findall(r"\\newcommand\{\\(\w+)\}\{((?:[^{}]|\{[^{}]*\})*)\}", open(path).read()))
 
 
 def test_input_lists_exist_and_exclude_later_families():
     for f in A.MAIN_GRID_FILES + AD.ADAPTIVE_FILES:
         assert os.path.exists(os.path.join(A.RES, f)), f
-    for f in E.ESOTA_FILES + D.DELEG_FILES:
+    for f in E.ESOTA_FILES:
         assert os.path.exists(os.path.join(E.RES, f)), f
+    for f, _keep in D.DELEG_FILES:   # (path, model filter); the active set exists (a9 when complete, else the clean set)
+        assert os.path.exists(f), f
     assert not any("partd" in f or "adaptive" in f for f in A.MAIN_GRID_FILES)
     assert not any("_pc_" in f or "pilot" in f for f in AD.ADAPTIVE_FILES)
     assert A.MAIN_GRID_FILES == sorted(A.MAIN_GRID_FILES)   # keep-last dedup reads them in sorted order
@@ -34,7 +36,7 @@ def test_main_and_adaptive_reproduce_frozen_macros(tmp_path, monkeypatch, capsys
     assert A.out_dir() == str(tmp_path)
     A.main(); AD.main()
     m = _macros(tmp_path / "numbers.tex")
-    assert m["NumTrials"] == "18683"            # 23002 with the old glob (4319 part d rows leaked in)
+    assert m["NumTrials"] == "18{,}683"            # 23002 with the old glob (4319 part d rows leaked in)
     a = _macros(tmp_path / "numbers_adaptive.tex")
     assert a["AdaptAOneNoneWorstN"] == "138/240"   # 195/480 with the old glob (part c rows leaked in)
     assert a["AdaptAOneProvGateHeldN"] == "24/480"

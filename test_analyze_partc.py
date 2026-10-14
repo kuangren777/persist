@@ -11,8 +11,8 @@ def test_table_matches_macros(tmp_path, monkeypatch):
     tab = open(tmp_path / "tabs" / "tab_partc.tex").read().strip().splitlines()
     mac = dict(re.findall(r"\\newcommand\{\\(\w+)\}\{([^}]*)\}", open(tmp_path / "numbers_partc.tex").read()))
     assert tab[-1] == "\\bottomrule"
-    tab = tab[:-1]
-    assert [l.split(" & ")[0] for l in tab] == ["reference gate", "taint matching", "Louck", "PPMF", "ROPE"]
+    tab = [l for l in tab[:-1] if not l.startswith("\\quad")]   # p rows under each gate
+    assert [l.split(" & ")[0] for l in tab] == ["reference gate", "loose taint matching", "corroboration gate", "authority gate", "ROPE (record)"]
     tags = ["ProvGate", "Ifc", "Louck", "Ppmf", "Rope"]
     for line, tag in zip(tab, tags):
         cells = line.rstrip(" \\").split(" & ")[1:]
@@ -20,4 +20,4 @@ def test_table_matches_macros(tmp_path, monkeypatch):
             pct, k, n = re.match(r"([\d.]+) \((\d+)/(\d+)\)", cell).groups()
             assert pct == mac[f"Partc{sm}{tag}HarmPct"]
             assert f"{100.0 * int(k) / int(n):.1f}" == pct
-            assert int(n) == (2303 if (tag, sm) == ("Ppmf", "AThree") else 2304)
+            assert int(n) == 2304   # clean set (a7d + a7e + P1 pre-tool) is complete; the old P1 missing PPMF cell is archived

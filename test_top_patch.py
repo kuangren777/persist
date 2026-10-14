@@ -9,7 +9,14 @@ def test_local_ports_and_routing():
     assert P._local_port("qwen3-32b-local") == 8031
     assert str(P.client("qwen3-8b-local").base_url).startswith("http://127.0.0.1:8021")
     assert str(P.client("llama31-8b-local").base_url).startswith("http://127.0.0.1:8023")
-    assert P.client("claude-sonnet-5") is P.HUB   # hosted models go through the LLM_API_BASE gateway
+    assert P.client("claude-sonnet-5") is P.hub()   # hosted models go through the LLM_API_BASE gateway
+
+
+def test_key_read_at_call_not_import(monkeypatch):
+    assert not hasattr(P, "KEY") and not hasattr(P, "HUB")
+    monkeypatch.setenv("LLM_API_BASE", "http://gw.test/v1"); monkeypatch.setenv("LLM_API_KEY", "k-call-time")
+    c = P.client("claude-sonnet-5")
+    assert c.api_key == "k-call-time" and str(c.base_url).startswith("http://gw.test/v1")
 
 
 def test_single_call_set():
